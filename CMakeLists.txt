@@ -49,6 +49,7 @@ juce_add_plugin(EnzoGain
     FORMATS ${PLUGIN_FORMATS}
     PRODUCT_NAME "EnzoGain"
     NEEDS_WEB_BROWSER TRUE
+    NEEDS_WEBVIEW2 TRUE
 )
 
 # WebView UI Resources - embed all UI files into plugin binary
