@@ -104,3 +104,8 @@ target_compile_definitions(EnzoGain
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
 )
+
+# Windows: Enable WebView2 for resource provider support
+if(WIN32)
+    target_compile_definitions(EnzoGain PUBLIC JUCE_USE_WIN_WEBVIEW2=1)
+endif()

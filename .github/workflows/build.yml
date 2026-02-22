@@ -41,7 +41,7 @@ jobs:
       - name: Install WebView2
         shell: powershell
         run: |
-          nuget install Microsoft.Web.WebView2 -OutputDirectory ${{ github.workspace }}/webview2
+          nuget install Microsoft.Web.WebView2 -Version 1.0.2535.41 -OutputDirectory "$env:USERPROFILE\AppData\Local\PackageManagement\NuGet\Packages"
 
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
