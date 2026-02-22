@@ -1,0 +1,92 @@
+name: Build EnzoGain
+
+on:
+  push:
+    tags: ['v*']        # Triggers on version tags like v1.0.0
+  workflow_dispatch:     # Manual trigger from GitHub UI
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          mkdir build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Package macOS
+        run: |
+          mkdir -p dist/macOS/VST3 dist/macOS/AU dist/macOS/Standalone
+          cp -R build/EnzoGain_artefacts/Release/VST3/EnzoGain.vst3 dist/macOS/VST3/
+          cp -R build/EnzoGain_artefacts/Release/AU/EnzoGain.component dist/macOS/AU/
+          cp -R build/EnzoGain_artefacts/Release/Standalone/EnzoGain.app dist/macOS/Standalone/
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: EnzoGain-macOS
+          path: dist/macOS/
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Package Windows
+        shell: bash
+        run: |
+          mkdir -p dist/Windows/VST3 dist/Windows/Standalone
+          cp -R build/EnzoGain_artefacts/Release/VST3/EnzoGain.vst3 dist/Windows/VST3/
+          cp build/EnzoGain_artefacts/Release/Standalone/EnzoGain.exe dist/Windows/Standalone/ 2>/dev/null || true
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: EnzoGain-Windows
+          path: dist/Windows/
+
+  release:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Download macOS build
+        uses: actions/download-artifact@v4
+        with:
+          name: EnzoGain-macOS
+          path: EnzoGain-macOS
+
+      - name: Download Windows build
+        uses: actions/download-artifact@v4
+        with:
+          name: EnzoGain-Windows
+          path: EnzoGain-Windows
+
+      - name: Create zips
+        run: |
+          cd EnzoGain-macOS && zip -r ../EnzoGain-macOS.zip . && cd ..
+          cd EnzoGain-Windows && zip -r ../EnzoGain-Windows.zip . && cd ..
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            EnzoGain-macOS.zip
+            EnzoGain-Windows.zip
+          generate_release_notes: true

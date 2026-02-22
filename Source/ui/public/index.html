@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EnzoGain</title>
+    <style>
+        /* CRITICAL: Use 100%, NOT 100vh — JUCE WebView viewport units
+           aren't ready until first resize, causing blank screen */
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            cursor: default;
+            -webkit-tap-highlight-color: transparent;
+
+            /* Light desaturated neon green */
+            background: linear-gradient(180deg, #e8f0e4 0%, #dce8d6 100%);
+            color: #2a2e28;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                         "Helvetica Neue", Arial, sans-serif;
+
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-sizing: border-box;
+            padding-top: 0;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        /* ====================================================================
+           PLUGIN HEADER
+           ==================================================================== */
+
+        .plugin-header {
+            width: 100%;
+            text-align: center;
+            padding: 2px 0 0 0;
+            flex-shrink: 0;
+        }
+
+        .plugin-header img {
+            max-width: 200px;
+            max-height: 56px;
+            width: auto;
+            height: auto;
+            display: inline-block;
+            object-fit: contain;
+        }
+
+        /* ====================================================================
+           MAIN GAIN SECTION
+           ==================================================================== */
+
+        .main-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
+            overflow: visible;
+        }
+
+        /* Gain knob centered, pan hangs off right */
+        .knob-row {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: visible;
+        }
+
+        /* Wire + pan anchored to right of gain, outside normal flow */
+        .pan-arm {
+            position: absolute;
+            left: calc(100% - 6px);
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            gap: 0;
+        }
+
+        /* ====================================================================
+           SATURATION DRAWER — slides in from left edge
+           ==================================================================== */
+
+        .sat-drawer {
+            position: fixed;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%) translateX(-62px);
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
+            z-index: 50;
+            transition: transform 0.35s cubic-bezier(0.4, 0.0, 0.2, 1),
+                        top 0.15s ease-out;
+        }
+
+        .sat-drawer.open {
+            transform: translateY(-50%) translateX(0px);
+        }
+
+        /* Inner panel with modes + drive */
+        .sat-panel {
+            width: 62px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: linear-gradient(180deg, #d4e0ce 0%, #c8d6c0 100%);
+            border: 1px solid #b0c0aa;
+            border-right: none;
+            border-radius: 0;
+            box-shadow: -2px 0 8px rgba(0,0,0,0.06);
+            padding: 6px 6px 6px 6px;
+            overflow: visible;
+        }
+
+        /* Toggle tab — always visible on the right side of the drawer */
+        .sat-tab {
+            width: 22px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            cursor: pointer;
+            background: linear-gradient(180deg, #d4e0ce 0%, #c8d6c0 100%);
+            border: 1px solid #b0c0aa;
+            border-left: none;
+            border-radius: 0 6px 6px 0;
+            padding: 6px 3px;
+            box-shadow: 2px 0 6px rgba(0,0,0,0.06);
+            transition: background 0.15s;
+            flex-shrink: 0;
+        }
+
+        .sat-tab:hover {
+            background: linear-gradient(180deg, #c8d8c2 0%, #bcceb4 100%);
+        }
+
+        .sat-tab-label {
+            writing-mode: vertical-lr;
+            text-orientation: mixed;
+            font-size: 8px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: #4a5a44;
+            line-height: 1;
+        }
+
+        /* Analog indicator LED */
+        .sat-tab-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #6b7566;
+            border: 1px solid rgba(0,0,0,0.15);
+            transition: background 0.3s, box-shadow 0.3s;
+        }
+
+        .sat-tab.active .sat-tab-dot {
+            background: #e8912a;
+            border-color: rgba(180, 100, 20, 0.4);
+            box-shadow:
+                0 0 3px 1px rgba(232, 145, 42, 0.6),
+                0 0 8px 2px rgba(232, 145, 42, 0.25);
+        }
+
+        .sat-rack-modes {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            margin-bottom: 5px;
+            width: 100%;
+        }
+
+        .sat-btn {
+            font-size: 7.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 4px 0;
+            border-radius: 3px;
+            border: 1px solid #b0c0aa;
+            background: transparent;
+            color: #5a6a54;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            line-height: 1;
+            width: 100%;
+        }
+
+        .sat-btn.active {
+            background: #4a8a42;
+            color: #f0f6ee;
+            border-color: #3a6b35;
+            box-shadow: 0 1px 3px rgba(58, 107, 53, 0.3);
+        }
+
+        .sat-btn:hover:not(.active) {
+            background: rgba(74, 138, 66, 0.12);
+            border-color: #6a9a62;
+        }
+
+        .sat-drive-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1px;
+            overflow: visible;
+        }
+
+        .sat-drive-label {
+            font-size: 7px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: #4a5a45;
+        }
+
+        .sat-drive-knob-wrap {
+            width: 48px;
+            height: 48px;
+            overflow: visible;
+        }
+
+        .sat-drive-value {
+            font-size: 10px;
+            font-weight: 500;
+            color: #2e5a28;
+            text-align: center;
+        }
+
+        .sat-drive-value .unit {
+            font-size: 8px;
+        }
+
+        /* Spicy sticker — slapped on, gets covered by sat drawer */
+        .spicy-sticker {
+            position: fixed;
+            left: 24px;
+            top: 50%;
+            transform: translateY(-65%) rotate(-8deg);
+            width: 64px;
+            height: auto;
+            z-index: 40;
+            pointer-events: none;
+            opacity: 0.85;
+            filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.12));
+        }
+
+        /* Wire: horizontal SVG connecting gain knob to pan knob */
+        .wire-svg {
+            width: 20px;
+            height: 4px;
+            flex-shrink: 0;
+            margin: 0 2px;
+        }
+
+        .pan-corner {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            flex-shrink: 0;
+        }
+
+        .pan-corner .knob-label {
+            font-size: 10px;
+            letter-spacing: 0.15em;
+        }
+
+        .pan-corner .knob-wrapper {
+            width: 52px;
+            height: 52px;
+        }
+
+        .pan-corner .knob-value {
+            font-size: 13px;
+            min-width: 40px;
+            font-weight: 500;
+            color: #2e5a28;
+        }
+
+        .pan-corner .knob-value .unit {
+            font-size: 10px;
+        }
+
+        .knob-section {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            overflow: visible;
+        }
+
+        .knob-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: #4a5a45;
+        }
+
+        .knob-wrapper {
+            position: relative;
+            width: 165px;
+            height: 165px;
+        }
+
+        .knob-wrapper.small {
+            width: 98px;
+            height: 98px;
+        }
+
+        .knob-wrapper.tiny {
+            width: 52px;
+            height: 52px;
+        }
+
+        .knob-wrapper canvas {
+            cursor: pointer;
+        }
+
+        /* ====================================================================
+           VALUE DISPLAY
+           ==================================================================== */
+
+        .knob-value {
+            font-size: 26px;
+            font-weight: 300;
+            color: #1a1e18;
+            text-align: center;
+            min-width: 100px;
+            letter-spacing: 0.02em;
+        }
+
+        #gain-value {
+            margin-top: -4px;
+        }
+
+        .knob-value.small {
+            font-size: 16px;
+            min-width: 60px;
+        }
+
+        .knob-value .unit {
+            font-size: 13px;
+            font-weight: 400;
+            color: #2e5a28;
+            margin-left: 2px;
+        }
+
+        .knob-value.small .unit {
+            font-size: 11px;
+        }
+
+        .db-indicator {
+            font-size: 11px;
+            font-weight: 400;
+            color: #4a6a44;
+            text-align: center;
+            margin-top: -6px;
+            letter-spacing: 0.02em;
+        }
+
+        /* ====================================================================
+           GAIN BAR INDICATOR
+           ==================================================================== */
+
+        .gain-bar-container {
+            width: 180px;
+            margin-top: 4px;
+            position: relative;
+        }
+
+        .gain-bar-track {
+            width: 100%;
+            height: 3px;
+            background: #c4d4be;
+            border-radius: 2px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .gain-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            background: linear-gradient(90deg, #4a8a42, #6aaa5a);
+            width: 66.67%;
+            will-change: width;
+        }
+
+        .gain-bar-ticks {
+            position: relative;
+            width: 100%;
+            height: 16px;
+            margin-top: 2px;
+        }
+
+        .gain-bar-tick {
+            position: absolute;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transform: translateX(-50%);
+        }
+
+        .gain-bar-tick .tick-line {
+            width: 1px;
+            height: 5px;
+            background: #a0b09a;
+        }
+
+        .gain-bar-tick.major .tick-line {
+            height: 6px;
+            background: #8a9a84;
+        }
+
+        .gain-bar-tick.unity .tick-line {
+            height: 8px;
+            background: #3a6b35;
+            opacity: 0.5;
+        }
+
+        .gain-bar-tick .tick-label {
+            font-size: 10px;
+            font-weight: 500;
+            color: #5a6a54;
+            letter-spacing: 0.03em;
+            margin-top: 1px;
+            white-space: nowrap;
+        }
+
+        .gain-bar-tick.unity .tick-label {
+            color: #2e5a28;
+            opacity: 0.7;
+        }
+
+        /* ====================================================================
+           LFO TOGGLE BAR
+           ==================================================================== */
+
+        .lfo-toggle-bar {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 6px 0 5px 0;
+            flex-shrink: 0;
+            margin-top: 6px;
+        }
+
+        .lfo-toggle-line {
+            flex: 1;
+            max-width: 60px;
+            height: 1px;
+            background: #b8c8b2;
+        }
+
+        .lfo-toggle-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.25em;
+            color: #4a5a44;
+            transition: color 0.2s;
+        }
+
+        /* Enable/disable button */
+        .lfo-enable-btn {
+            width: 28px;
+            height: 14px;
+            border-radius: 7px;
+            background: #c4d4be;
+            border: 1px solid #a0b49a;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.25s, border-color 0.25s;
+            flex-shrink: 0;
+        }
+
+        .lfo-enable-btn.active {
+            background: #7ab872;
+            border-color: #3a6b35;
+        }
+
+        .lfo-enable-btn .toggle-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #8a9a84;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: left 0.25s, background 0.25s;
+        }
+
+        .lfo-enable-btn.active .toggle-dot {
+            left: 16px;
+            background: #2a5a24;
+        }
+
+        /* ====================================================================
+           LFO PANEL (collapsible)
+           ==================================================================== */
+
+        .lfo-panel {
+            width: 100%;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.35s ease, opacity 0.25s ease;
+            opacity: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            /* Slightly deeper green plane */
+            background: linear-gradient(180deg, #d6e2d0 0%, #cddac6 100%);
+            border-top: 1px solid #bfcfb8;
+            box-shadow: inset 0 2px 6px rgba(40, 70, 35, 0.07);
+        }
+
+        .lfo-panel.open {
+            max-height: 260px;
+            opacity: 1;
+        }
+
+        .lfo-knobs-row {
+            display: flex;
+            gap: 30px;
+            padding: 6px 0 8px 0;
+            align-items: flex-start;
+        }
+
+        /* ====================================================================
+           MINI BAR INDICATORS (under LFO knobs)
+           ==================================================================== */
+
+        .mini-bar-container {
+            width: 82px;
+            margin-top: 3px;
+        }
+
+        .mini-bar-track {
+            width: 100%;
+            height: 2px;
+            background: #c4d4be;
+            border-radius: 1px;
+            overflow: hidden;
+        }
+
+        .mini-bar-fill {
+            height: 100%;
+            border-radius: 1px;
+            background: linear-gradient(90deg, #4a8a42, #6aaa5a);
+            width: 0%;
+            will-change: width;
+        }
+
+        .mini-bar-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 2px;
+        }
+
+        .mini-bar-labels span {
+            font-size: 9px;
+            font-weight: 500;
+            color: #5a6a54;
+        }
+
+        /* ====================================================================
+           FOOTER
+           ==================================================================== */
+
+        .plugin-footer {
+            width: 100%;
+            text-align: center;
+            font-size: 10px;
+            color: #6a7a64;
+            letter-spacing: 0.15em;
+            text-transform: none;
+            padding: 8px 0 8px 0;
+            flex-shrink: 0;
+        }
+
+        .plugin-footer .soundcloud {
+            color: #3a6b35;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <!-- Spicy sticker — slapped next to sat drawer, gets covered when it opens -->
+    <img class="spicy-sticker" id="spicy-sticker" src="/spicy.png" alt="Spicy" />
+
+    <!-- Saturation drawer — fixed to left window edge, JS-aligned to gain knob -->
+    <div class="sat-drawer" id="sat-drawer">
+        <div class="sat-panel">
+            <div class="sat-rack-modes" id="sat-buttons">
+                <button class="sat-btn" data-mode="1">Tape</button>
+                <button class="sat-btn" data-mode="2">Tube</button>
+                <button class="sat-btn" data-mode="3">Digi</button>
+                <button class="sat-btn" data-mode="4">Fold</button>
+            </div>
+            <div class="sat-drive-section">
+                <span class="sat-drive-label">Drive</span>
+                <div class="sat-drive-knob-wrap">
+                    <canvas id="sat-drive-knob" width="48" height="48"></canvas>
+                </div>
+                <div class="sat-drive-value" id="sat-drive-value">0<span class="unit">%</span></div>
+            </div>
+        </div>
+        <div class="sat-tab" id="sat-enable-btn">
+            <div class="sat-tab-dot"></div>
+            <span class="sat-tab-label">SAT</span>
+        </div>
+    </div>
+
+    <div class="plugin-header">
+        <img src="/logo.png" alt="EnzoGain" />
+    </div>
+
+    <div class="main-section" id="main-section">
+        <div class="knob-row">
+            <div class="knob-section" id="gain-section">
+                <div class="knob-label">Gain</div>
+                <div class="knob-wrapper">
+                    <canvas id="gain-knob" width="165" height="165"></canvas>
+                </div>
+                <div class="knob-value" id="gain-value">100<span class="unit">%</span></div>
+                <div class="db-indicator" id="gain-db">0.0 dB</div>
+            </div>
+
+            <div class="pan-arm">
+                <svg class="wire-svg" viewBox="0 0 20 4" xmlns="http://www.w3.org/2000/svg">
+                    <line x1="0" y1="2" x2="20" y2="2" stroke="#a0b49a" stroke-width="1.5" stroke-linecap="round"/>
+                    <circle cx="1" cy="2" r="2" fill="#a0b49a"/>
+                    <circle cx="19" cy="2" r="2" fill="#a0b49a"/>
+                </svg>
+
+                <div class="pan-corner" id="pan-section">
+                    <div class="knob-label">Pan</div>
+                    <div class="knob-wrapper tiny">
+                        <canvas id="pan-knob" width="52" height="52"></canvas>
+                    </div>
+                    <div class="knob-value" id="pan-value">C</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="gain-bar-container">
+            <div class="gain-bar-track">
+                <div class="gain-bar-fill" id="gain-bar-fill"></div>
+            </div>
+            <div class="gain-bar-ticks">
+                <div class="gain-bar-tick major" style="left: 0%">
+                    <div class="tick-line"></div>
+                    <span class="tick-label">0</span>
+                </div>
+                <div class="gain-bar-tick" style="left: 16.67%">
+                    <div class="tick-line"></div>
+                </div>
+                <div class="gain-bar-tick major" style="left: 33.33%">
+                    <div class="tick-line"></div>
+                    <span class="tick-label">50</span>
+                </div>
+                <div class="gain-bar-tick" style="left: 50%">
+                    <div class="tick-line"></div>
+                </div>
+                <div class="gain-bar-tick unity" style="left: 66.67%">
+                    <div class="tick-line"></div>
+                    <span class="tick-label">100</span>
+                </div>
+                <div class="gain-bar-tick" style="left: 83.33%">
+                    <div class="tick-line"></div>
+                </div>
+                <div class="gain-bar-tick major" style="left: 100%">
+                    <div class="tick-line"></div>
+                    <span class="tick-label">150</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LFO Toggle Bar -->
+    <div class="lfo-toggle-bar" id="lfo-toggle-bar">
+        <div class="lfo-toggle-line"></div>
+        <div class="lfo-enable-btn" id="lfo-enable-btn">
+            <div class="toggle-dot"></div>
+        </div>
+        <span class="lfo-toggle-label">LFO</span>
+        <div class="lfo-toggle-line"></div>
+    </div>
+
+    <!-- Collapsible LFO Panel -->
+    <div class="lfo-panel" id="lfo-panel">
+        <div class="lfo-knobs-row">
+            <div class="knob-section">
+                <div class="knob-label">Strength</div>
+                <div class="knob-wrapper small">
+                    <canvas id="lfo-strength-knob" width="98" height="98"></canvas>
+                </div>
+                <div class="knob-value small" id="lfo-strength-value">0<span class="unit">%</span></div>
+                <div class="mini-bar-container">
+                    <div class="mini-bar-track">
+                        <div class="mini-bar-fill" id="lfo-strength-bar"></div>
+                    </div>
+                    <div class="mini-bar-labels">
+                        <span>0%</span>
+                        <span>100%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="knob-section">
+                <div class="knob-label">Frequency</div>
+                <div class="knob-wrapper small">
+                    <canvas id="lfo-freq-knob" width="98" height="98"></canvas>
+                </div>
+                <div class="knob-value small" id="lfo-freq-value">1.00<span class="unit">Hz</span></div>
+                <div class="mini-bar-container">
+                    <div class="mini-bar-track">
+                        <div class="mini-bar-fill" id="lfo-freq-bar"></div>
+                    </div>
+                    <div class="mini-bar-labels">
+                        <span>0.1</span>
+                        <span>20 Hz</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="plugin-footer">Follow <span class="soundcloud">ENZO!</span> on SoundCloud</div>
+
+    <script type="module">
+        // ====================================================================
+        // JUCE FRONTEND LIBRARY
+        // ====================================================================
+
+        import * as Juce from "./js/juce/index.js";
+
+        // Disable right-click context menu
+        document.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            return false;
+        });
+
+        // Disable default drag behaviors
+        document.addEventListener("dragstart", (e) => {
+            e.preventDefault();
+        });
+
+        // Error handling
+        window.addEventListener("error", (e) => {
+            console.error("JavaScript error:", e.message, e.filename, e.lineno);
+        });
+        window.addEventListener("unhandledrejection", (e) => {
+            console.error("Unhandled promise rejection:", e.reason);
+        });
+
+        // ====================================================================
+        // PRO STUDIO ROTARY KNOB
+        // ====================================================================
+
+        class ProStudioKnob {
+            constructor(canvas, paramState, config) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext("2d");
+                this.paramState = paramState;
+                this.config = {
+                    min: config.min || 0,
+                    max: config.max || 1,
+                    accentColor: config.accentColor || "#5b9bd5",
+                    valueEl: config.valueEl || null,
+                    formatValue: config.formatValue || null,
+                    barFillEl: config.barFillEl || null,
+                    defaultNormalized: config.defaultNormalized ?? 0.5,
+                    unityNormalized: config.unityNormalized ?? null,
+                    ...config
+                };
+
+                this.isDragging = false;
+                this.startY = 0;
+                this.startValue = 0;
+
+                // Smoothing
+                this.displayValue = this.paramState.getNormalisedValue();
+                this.targetValue = this.displayValue;
+                this.barDisplayValue = this.displayValue;
+                this.animating = false;
+
+                this.setupEventListeners();
+                this.render();
+            }
+
+            startAnimationLoop() {
+                if (this.animating) return;
+                this.animating = true;
+                const tick = () => {
+                    const lerpFactor = 0.18;
+                    this.displayValue += (this.targetValue - this.displayValue) * lerpFactor;
+                    this.barDisplayValue += (this.targetValue - this.barDisplayValue) * lerpFactor;
+
+                    if (Math.abs(this.displayValue - this.targetValue) < 0.0005) {
+                        this.displayValue = this.targetValue;
+                        this.barDisplayValue = this.targetValue;
+                    }
+
+                    this.render();
+                    this.updateDisplay();
+
+                    if (Math.abs(this.displayValue - this.targetValue) > 0.0001) {
+                        requestAnimationFrame(tick);
+                    } else {
+                        this.animating = false;
+                    }
+                };
+                requestAnimationFrame(tick);
+            }
+
+            setupEventListeners() {
+                this.canvas.addEventListener("mousedown", (e) => {
+                    this.isDragging = true;
+                    this.startY = e.clientY;
+                    this.startValue = this.paramState.getNormalisedValue();
+                    this.canvas.style.cursor = "grabbing";
+                });
+
+                document.addEventListener("mousemove", (e) => {
+                    if (!this.isDragging) return;
+                    const delta = (this.startY - e.clientY) / 300;
+                    let newValue = Math.max(0, Math.min(1, this.startValue + delta));
+
+                    // Snap to center if configured
+                    if (this.config.snapToCenter) {
+                        const snapPoint = this.config.unityNormalized ?? 0.5;
+                        const threshold = this.config.snapThreshold ?? 0.03;
+                        if (Math.abs(newValue - snapPoint) < threshold) {
+                            newValue = snapPoint;
+                        }
+                    }
+
+                    this.paramState.setNormalisedValue(newValue);
+                    this.targetValue = newValue;
+                    this.startAnimationLoop();
+                });
+
+                document.addEventListener("mouseup", () => {
+                    if (this.isDragging) {
+                        this.isDragging = false;
+                        this.canvas.style.cursor = "pointer";
+                    }
+                });
+
+                // Double-click to reset to default
+                this.canvas.addEventListener("dblclick", () => {
+                    this.paramState.setNormalisedValue(this.config.defaultNormalized);
+                    this.targetValue = this.config.defaultNormalized;
+                    this.startAnimationLoop();
+                });
+
+                this.paramState.valueChangedEvent.addListener(() => {
+                    this.targetValue = this.paramState.getNormalisedValue();
+                    this.startAnimationLoop();
+                });
+            }
+
+            render() {
+                const ctx = this.ctx;
+                const w = this.canvas.width;
+                const h = this.canvas.height;
+                const cx = w / 2;
+                const cy = h / 2;
+                const isSmall = w <= 120;
+                const isTiny = w <= 60;
+                const radius = isTiny ? 20 : isSmall ? 38 : 65;
+                const trackWidth = isTiny ? 3 : isSmall ? 5 : 8;
+                const knobRadius = isTiny ? 14 : isSmall ? 26 : 45;
+                const accent = this.config.accentColor;
+
+                ctx.clearRect(0, 0, w, h);
+
+                const normalizedValue = this.displayValue;
+
+                // Arc angles (270 degrees of rotation)
+                const startAngle = (135 * Math.PI) / 180;
+                const endAngle = (45 * Math.PI) / 180;
+                const totalRotation = endAngle - startAngle + 2 * Math.PI;
+                const currentAngle = startAngle + normalizedValue * totalRotation;
+
+                const unityNorm = this.config.unityNormalized;
+                const unityAngle = unityNorm != null ? startAngle + unityNorm * totalRotation : null;
+
+                // ---- Outer shadow glow ----
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius + 2, startAngle, currentAngle);
+                ctx.strokeStyle = "rgba(74, 138, 66, 0.15)";
+                ctx.lineWidth = isTiny ? 5 : isSmall ? 9 : 14;
+                ctx.lineCap = "round";
+                ctx.stroke();
+                ctx.restore();
+
+                // ---- Background track ----
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, startAngle, startAngle + totalRotation);
+                ctx.strokeStyle = "#c0d0ba";
+                ctx.lineWidth = trackWidth;
+                ctx.lineCap = "round";
+                ctx.stroke();
+
+                // ---- Value arc ----
+                if (normalizedValue > 0.005) {
+                    const isBoost = unityNorm != null && normalizedValue > unityNorm;
+
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, radius, startAngle, currentAngle);
+                    ctx.strokeStyle = isBoost ? "#5aaa4a" : accent;
+                    ctx.lineWidth = trackWidth;
+                    ctx.lineCap = "round";
+                    ctx.stroke();
+                }
+
+                // ---- Unity tick mark ----
+                if (unityAngle != null) {
+                    const tickInner = radius - (isTiny ? 4 : isSmall ? 8 : 11);
+                    const tickOuter = radius + (isTiny ? 4 : isSmall ? 8 : 11);
+                    ctx.beginPath();
+                    ctx.moveTo(cx + Math.cos(unityAngle) * tickInner, cy + Math.sin(unityAngle) * tickInner);
+                    ctx.lineTo(cx + Math.cos(unityAngle) * tickOuter, cy + Math.sin(unityAngle) * tickOuter);
+                    ctx.strokeStyle = "rgba(58, 107, 53, 0.4)";
+                    ctx.lineWidth = 2;
+                    ctx.lineCap = "round";
+                    ctx.stroke();
+                }
+
+                // ---- Inner knob body ----
+
+                // Drop shadow (elevation effect)
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(cx, cy + (isTiny ? 1.5 : isSmall ? 2.5 : 4), knobRadius, 0, 2 * Math.PI);
+                ctx.fillStyle = "rgba(30, 50, 25, 0.18)";
+                ctx.filter = isTiny ? "blur(2px)" : isSmall ? "blur(3px)" : "blur(5px)";
+                ctx.fill();
+                ctx.restore();
+
+                // Main knob gradient (top-lit)
+                const knobGrad = ctx.createRadialGradient(
+                    cx - (isTiny ? 2 : isSmall ? 4 : 8), cy - (isTiny ? 2 : isSmall ? 5 : 10), isTiny ? 1 : isSmall ? 2 : 4,
+                    cx, cy, knobRadius
+                );
+                knobGrad.addColorStop(0, "#f8fcf6");
+                knobGrad.addColorStop(0.45, "#f0f6ee");
+                knobGrad.addColorStop(0.85, "#dde8d9");
+                knobGrad.addColorStop(1, "#d0deca");
+
+                ctx.beginPath();
+                ctx.arc(cx, cy, knobRadius, 0, 2 * Math.PI);
+                ctx.fillStyle = knobGrad;
+                ctx.fill();
+
+                // Subtle concentric texture rings
+                const ringCount = isTiny ? 5 : isSmall ? 9 : 14;
+                for (let i = 1; i <= ringCount; i++) {
+                    const r = (knobRadius * 0.2) + (knobRadius * 0.65) * (i / ringCount);
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+                    ctx.strokeStyle = i % 2 === 0 ? "rgba(160, 180, 155, 0.35)" : "rgba(200, 218, 195, 0.4)";
+                    ctx.lineWidth = 0.5;
+                    ctx.stroke();
+                }
+
+                // Inner highlight (top-left crescent)
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(cx, cy, knobRadius - 1, 0, 2 * Math.PI);
+                ctx.clip();
+                const highlightR = knobRadius * 0.85;
+                const hlGrad = ctx.createRadialGradient(
+                    cx - knobRadius * 0.3, cy - knobRadius * 0.35, highlightR * 0.1,
+                    cx - knobRadius * 0.3, cy - knobRadius * 0.35, highlightR
+                );
+                hlGrad.addColorStop(0, "rgba(255, 255, 255, 0.35)");
+                hlGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
+                ctx.fillStyle = hlGrad;
+                ctx.fillRect(0, 0, w, h);
+                ctx.restore();
+
+                // Inner shadow (bottom-right, recessed edge)
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(cx, cy, knobRadius, 0, 2 * Math.PI);
+                ctx.clip();
+                const isGrad = ctx.createRadialGradient(
+                    cx + knobRadius * 0.25, cy + knobRadius * 0.3, knobRadius * 0.5,
+                    cx + knobRadius * 0.25, cy + knobRadius * 0.3, knobRadius * 1.1
+                );
+                isGrad.addColorStop(0, "rgba(40, 60, 35, 0)");
+                isGrad.addColorStop(1, "rgba(40, 60, 35, 0.07)");
+                ctx.fillStyle = isGrad;
+                ctx.fillRect(0, 0, w, h);
+                ctx.restore();
+
+                // Outer rim (beveled edge)
+                ctx.beginPath();
+                ctx.arc(cx, cy, knobRadius, 0, 2 * Math.PI);
+                ctx.strokeStyle = "#a0b09a";
+                ctx.lineWidth = isTiny ? 1 : 1.5;
+                ctx.stroke();
+
+                // Subtle top-edge highlight
+                ctx.beginPath();
+                ctx.arc(cx, cy, knobRadius - (isTiny ? 0.5 : 1), Math.PI * 1.15, Math.PI * 1.85);
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
+                ctx.lineWidth = isTiny ? 0.5 : 1;
+                ctx.stroke();
+
+                // ---- Position indicator notch ----
+                const notchStart = isTiny ? 6 : isSmall ? 14 : 24;
+                const notchEnd = isTiny ? 11 : isSmall ? 22 : 37;
+                const x1 = cx + Math.cos(currentAngle) * notchStart;
+                const y1 = cy + Math.sin(currentAngle) * notchStart;
+                const x2 = cx + Math.cos(currentAngle) * notchEnd;
+                const y2 = cy + Math.sin(currentAngle) * notchEnd;
+
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.strokeStyle = accent;
+                ctx.lineWidth = isTiny ? 1.5 : isSmall ? 2 : 2.5;
+                ctx.lineCap = "round";
+                ctx.stroke();
+            }
+
+            updateDisplay() {
+                if (!this.config.formatValue || !this.config.valueEl) return;
+
+                const actualValue = this.config.min +
+                    this.barDisplayValue * (this.config.max - this.config.min);
+
+                this.config.valueEl.innerHTML = this.config.formatValue(actualValue);
+
+                // Optional gain bar fill update
+                if (this.config.barFillEl) {
+                    const percent = actualValue * 100;
+                    const barPercent = Math.min(100, (percent / 150) * 100);
+                    this.config.barFillEl.style.width = barPercent.toFixed(2) + "%";
+                    if (percent > 100) {
+                        this.config.barFillEl.style.background = "linear-gradient(90deg, #4a8a42, #6aaa5a, #8aca7a)";
+                    } else {
+                        this.config.barFillEl.style.background = "linear-gradient(90deg, #4a8a42, #6aaa5a)";
+                    }
+                }
+
+                // Optional mini bar fill update
+                if (this.config.miniBarEl) {
+                    const range = this.config.max - this.config.min;
+                    const pct = ((actualValue - this.config.min) / range) * 100;
+                    this.config.miniBarEl.style.width = Math.min(100, pct).toFixed(2) + "%";
+                }
+
+                // Optional dB display
+                if (this.config.dbEl) {
+                    let db;
+                    if (actualValue <= 0.0001) {
+                        db = "-\u221E";
+                    } else {
+                        db = (20 * Math.log10(actualValue)).toFixed(1);
+                        if (db > 0) db = "+" + db;
+                    }
+                    this.config.dbEl.textContent = db + " dB";
+                }
+            }
+        }
+
+        // ====================================================================
+        // PARAMETER BINDING
+        // ====================================================================
+
+        if (!window.__JUCE__) {
+            console.error("JUCE backend not available");
+            document.body.innerHTML = '<h1 style="color:#3a6b35">Error: JUCE backend not connected</h1>';
+            throw new Error("JUCE backend not connected");
+        }
+
+        console.log("JUCE backend connected:", window.__JUCE__.backend);
+
+        const gainState = Juce.getSliderState("GAIN");
+        const panState = Juce.getSliderState("PAN");
+        const lfoStrengthState = Juce.getSliderState("LFO_STRENGTH");
+        const lfoFreqState = Juce.getSliderState("LFO_FREQ");
+        const satModeState = Juce.getSliderState("SAT_MODE");
+        const satDriveState = Juce.getSliderState("SAT_DRIVE");
+
+        const gainKnob = new ProStudioKnob(
+            document.getElementById("gain-knob"),
+            gainState,
+            {
+                paramId: "GAIN",
+                min: 0.0,
+                max: 1.5,
+                accentColor: "#4a8a42",
+                defaultNormalized: 1.0 / 1.5,
+                unityNormalized: 1.0 / 1.5,
+                valueEl: document.getElementById("gain-value"),
+                dbEl: document.getElementById("gain-db"),
+                barFillEl: document.getElementById("gain-bar-fill"),
+                formatValue: (v) => {
+                    const pct = Math.round(v * 100);
+                    return pct + '<span class="unit">%</span>';
+                }
+            }
+        );
+
+        // Pan knob with snap-to-center
+        const panKnob = new ProStudioKnob(
+            document.getElementById("pan-knob"),
+            panState,
+            {
+                paramId: "PAN",
+                min: -100.0,
+                max: 100.0,
+                accentColor: "#4a8a42",
+                defaultNormalized: 0.5,
+                unityNormalized: 0.5,
+                snapToCenter: true,
+                snapThreshold: 0.03,
+                valueEl: document.getElementById("pan-value"),
+                formatValue: (v) => {
+                    const rounded = Math.round(v);
+                    if (rounded === 0) return "C";
+                    if (rounded < 0) return Math.abs(rounded) + '<span class="unit">% L</span>';
+                    return rounded + '<span class="unit">% R</span>';
+                }
+            }
+        );
+
+        const lfoStrengthKnob = new ProStudioKnob(
+            document.getElementById("lfo-strength-knob"),
+            lfoStrengthState,
+            {
+                paramId: "LFO_STRENGTH",
+                min: 0.0,
+                max: 100.0,
+                accentColor: "#4a8a42",
+                defaultNormalized: 0.0,
+                valueEl: document.getElementById("lfo-strength-value"),
+                miniBarEl: document.getElementById("lfo-strength-bar"),
+                formatValue: (v) => {
+                    return Math.round(v) + '<span class="unit">%</span>';
+                }
+            }
+        );
+
+        const lfoFreqKnob = new ProStudioKnob(
+            document.getElementById("lfo-freq-knob"),
+            lfoFreqState,
+            {
+                paramId: "LFO_FREQ",
+                min: 0.1,
+                max: 20.0,
+                accentColor: "#4a8a42",
+                defaultNormalized: 0.05, // ~1Hz with skew
+                valueEl: document.getElementById("lfo-freq-value"),
+                miniBarEl: document.getElementById("lfo-freq-bar"),
+                formatValue: (v) => {
+                    return v.toFixed(2) + '<span class="unit">Hz</span>';
+                }
+            }
+        );
+
+        // Initialize displays
+        gainKnob.updateDisplay();
+        panKnob.updateDisplay();
+        lfoStrengthKnob.updateDisplay();
+        lfoFreqKnob.updateDisplay();
+
+        // ====================================================================
+        // SATURATION RACK
+        // ====================================================================
+
+        const satEnabledState = Juce.getToggleState("SAT_ENABLED");
+        const satDrawer = document.getElementById("sat-drawer");
+        const satEnableBtn = document.getElementById("sat-enable-btn");
+        const satButtons = document.querySelectorAll('.sat-btn');
+
+        // Drive knob
+        const satDriveKnob = new ProStudioKnob(
+            document.getElementById("sat-drive-knob"),
+            satDriveState,
+            {
+                paramId: "SAT_DRIVE",
+                min: 0.0,
+                max: 100.0,
+                accentColor: "#4a8a42",
+                defaultNormalized: 0.5,
+                valueEl: document.getElementById("sat-drive-value"),
+                formatValue: (v) => {
+                    return Math.round(v) + '<span class="unit">%</span>';
+                }
+            }
+        );
+        satDriveKnob.updateDisplay();
+
+        // Sync sat mode buttons
+        function syncSatModeUI() {
+            const modeIndex = Math.round(satModeState.getNormalisedValue() * 4);
+            satButtons.forEach(btn => {
+                const btnMode = parseInt(btn.dataset.mode);
+                btn.classList.toggle('active', btnMode === modeIndex);
+            });
+        }
+
+        satButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const mode = parseInt(btn.dataset.mode);
+                const currentMode = Math.round(satModeState.getNormalisedValue() * 4);
+                if (mode === currentMode) {
+                    satModeState.setNormalisedValue(0.0);
+                } else {
+                    satModeState.setNormalisedValue(mode / 4.0);
+                }
+            });
+        });
+
+        satModeState.valueChangedEvent.addListener(syncSatModeUI);
+        syncSatModeUI();
+
+        // Sync sat enabled toggle — slides drawer in/out
+        function syncSatEnabledUI(enabled) {
+            satEnableBtn.classList.toggle("active", enabled);
+            satDrawer.classList.toggle("open", enabled);
+        }
+
+        syncSatEnabledUI(satEnabledState.getValue());
+
+        satEnableBtn.addEventListener("click", () => {
+            satEnabledState.setValue(!satEnabledState.getValue());
+        });
+
+        satEnabledState.valueChangedEvent.addListener(() => {
+            syncSatEnabledUI(satEnabledState.getValue());
+        });
+
+        // Keep drawer + sticker vertically centred on the gain knob
+        const gainKnobCanvas = document.getElementById("gain-knob");
+        const spicySticker = document.getElementById("spicy-sticker");
+        function alignDrawerToGain() {
+            const rect = gainKnobCanvas.getBoundingClientRect();
+            const center = rect.top + rect.height / 2;
+            satDrawer.style.top = center + "px";
+            spicySticker.style.top = center + "px";
+        }
+        alignDrawerToGain();
+        window.addEventListener("resize", alignDrawerToGain);
+
+        // ====================================================================
+        // WIRE CONNECTION (gain knob bottom → 90° turn → pan knob left)
+        // ====================================================================
+        // ====================================================================
+        // LFO TOGGLE (single button controls enable + panel visibility)
+        // C++ handles window resize via LFO_ENABLED parameter listener
+        // ====================================================================
+
+        const lfoEnabledState = Juce.getToggleState("LFO_ENABLED");
+        const lfoPanel = document.getElementById("lfo-panel");
+        const lfoEnableBtn = document.getElementById("lfo-enable-btn");
+
+        function syncLfoUI(enabled) {
+            lfoEnableBtn.classList.toggle("active", enabled);
+            lfoPanel.classList.toggle("open", enabled);
+        }
+
+        // Initialize from saved state
+        syncLfoUI(lfoEnabledState.getValue());
+
+        // Click the toggle button: flip LFO_ENABLED parameter
+        lfoEnableBtn.addEventListener("click", () => {
+            lfoEnabledState.setValue(!lfoEnabledState.getValue());
+        });
+
+        // Listen for external changes (DAW automation, state recall)
+        lfoEnabledState.valueChangedEvent.addListener(() => {
+            syncLfoUI(lfoEnabledState.getValue());
+        });
+
+        console.log("EnzoGain UI initialized");
+    </script>
+</body>
+</html>

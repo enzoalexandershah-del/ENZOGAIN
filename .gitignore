@@ -1,0 +1,16 @@
+# Build artifacts
+build/
+cmake-build-*/
+
+# IDE files
+.idea/
+.vscode/
+*.xcodeproj/
+*.xcworkspace/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Distribution folders (built locally)
+dist/
