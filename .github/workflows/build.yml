@@ -39,14 +39,21 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install WebView2
-        shell: powershell
+        shell: cmd
+        run: nuget install Microsoft.Web.WebView2 -Version 1.0.2535.41 -OutputDirectory ${{ github.workspace }}\webview2
+
+      - name: Verify WebView2 install
+        shell: cmd
         run: |
-          nuget install Microsoft.Web.WebView2 -Version 1.0.2535.41 -OutputDirectory "${{ github.workspace }}/webview2"
+          dir /s /b "${{ github.workspace }}\webview2\*WebView2.h"
+          if errorlevel 1 (echo WebView2.h NOT FOUND & exit /b 1)
 
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ github.workspace }}/webview2"
+        shell: cmd
+        run: cmake -B build -DJUCE_WEBVIEW2_PACKAGE_LOCATION=${{ github.workspace }}\webview2
 
       - name: Build
+        shell: cmd
         run: cmake --build build --config Release
 
       - name: Package Windows
