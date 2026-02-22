@@ -38,8 +38,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install WebView2
+        shell: powershell
+        run: |
+          nuget install Microsoft.Web.WebView2 -OutputDirectory ${{ github.workspace }}/webview2
+
       - name: Configure
-        run: cmake -B build
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: cmake --build build --config Release
@@ -48,7 +53,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist/Windows/VST3 dist/Windows/Standalone
-          cp -R "build/EnzoGain_artefacts/Release/VST3/EnzoGain.vst3" dist/Windows/VST3/
+          cp -R "build/EnzoGain_artefacts/Release/VST3/EnzoGain.vst3" dist/Windows/VST3/ 2>/dev/null || \
+          cp -R "build/EnzoGain_artefacts/VST3/EnzoGain.vst3" dist/Windows/VST3/ 2>/dev/null || true
           find build/EnzoGain_artefacts -name "EnzoGain.exe" -exec cp {} dist/Windows/Standalone/ \; 2>/dev/null || true
 
       - name: Upload Windows artifacts
