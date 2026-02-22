@@ -38,7 +38,7 @@ Then open your DAW and rescan plugins.
 **Requirements:** CMake 3.22+, a C++ compiler (Xcode on macOS, Visual Studio 2019+ on Windows), and Git.
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/EnzoGain.git
+git clone https://github.com/enzoalexandershah-del/EnzoGain.git
 cd EnzoGain
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
